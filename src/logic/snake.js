@@ -23,3 +23,13 @@ export function willCollideWithWall(currentHead, direction, gridWidth, gridHeigh
   const next = computeNextHead(currentHead, direction);
   return isOutOfBounds(next, gridWidth, gridHeight);
 }
+
+export function willCollideWithSelf(nextHead, segments, tailWillMove) {
+  const lastIndex = segments.length - 1;
+  for (let i = 0; i < segments.length; i++) {
+    if (tailWillMove && i === lastIndex) continue;
+    const cell = segments[i];
+    if (cell.x === nextHead.x && cell.y === nextHead.y) return true;
+  }
+  return false;
+}

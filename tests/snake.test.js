@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeNextHead, moveSnake, positionsToOccupiedSet, isOutOfBounds, willCollideWithWall } from '../src/logic/snake.js';
+import { computeNextHead, moveSnake, positionsToOccupiedSet, isOutOfBounds, willCollideWithWall, willCollideWithSelf } from '../src/logic/snake.js';
 
 describe('snake logic', () => {
   it('computes next head based on direction', () => {
@@ -38,6 +38,20 @@ describe('snake logic', () => {
     expect(willCollideWithWall({ x: 0, y: 0 }, { x: 0, y: -1 }, 20, 20)).toBe(true);
     expect(willCollideWithWall({ x: 0, y: 19 }, { x: 0, y: 1 }, 20, 20)).toBe(true);
     expect(willCollideWithWall({ x: 1, y: 1 }, { x: 1, y: 0 }, 20, 20)).toBe(false);
+  });
+
+  it('detects self collision; ignores tail when it moves', () => {
+    const segments = [
+      { x: 5, y: 5 }, // head
+      { x: 4, y: 5 },
+      { x: 3, y: 5 }
+    ];
+    // Moving into body always collides
+    expect(willCollideWithSelf({ x: 4, y: 5 }, segments, true)).toBe(true);
+    // Moving into tail is allowed when tail moves
+    expect(willCollideWithSelf({ x: 3, y: 5 }, segments, true)).toBe(false);
+    // If tail does not move (growth), moving into current tail collides
+    expect(willCollideWithSelf({ x: 3, y: 5 }, segments, false)).toBe(true);
   });
 });
 

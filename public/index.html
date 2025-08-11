@@ -233,6 +233,16 @@
           head = { ...snakeSegments[0] };
         }
 
+        function willCollideWithSelf(nextHead, segments, tailWillMove) {
+          const lastIndex = segments.length - 1;
+          for (let i = 0; i < segments.length; i++) {
+            if (tailWillMove && i === lastIndex) continue;
+            const s = segments[i];
+            if (s.x === nextHead.x && s.y === nextHead.y) return true;
+          }
+          return false;
+        }
+
         function advanceGameState() {
           if (gameState !== GAME_STATE_RUNNING) return;
           direction = queuedDirection;
@@ -243,7 +253,13 @@
             return;
           }
           const nextHead = { x: nextX, y: nextY };
-          if (cellsEqual(nextHead, foodCell)) {
+          const willEatNow = cellsEqual(nextHead, foodCell);
+          const tailWillMove = pendingGrowth === 0 && !willEatNow;
+          if (willCollideWithSelf(nextHead, snakeSegments, tailWillMove)) {
+            triggerGameOver();
+            return;
+          }
+          if (willEatNow) {
             pendingGrowth += 1;
             foodCell = spawnFoodOnEmptyCell();
           }
