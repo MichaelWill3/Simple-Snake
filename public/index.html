@@ -1,32 +1,229 @@
-<!doctype html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Snake</title>
-    <style>
-      html, body {
-        margin: 0;
-        padding: 0;
-        height: 100%;
-        background: #111;
-        color: #ddd;
-        font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
-        display: grid;
-        place-items: center;
-      }
-      .box {
-        border: 1px solid #333;
-        padding: 16px 20px;
-        border-radius: 8px;
-        background: #1a1a1a;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="box">It works.</div>
-  </body>
-  </html>
+ <!doctype html>
+ <html>
+   <head>
+     <meta charset="UTF-8" />
+     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+     <title>Snake</title>
+     <style>
+       :root { color-scheme: dark; }
+       html, body {
+         margin: 0;
+         padding: 0;
+         height: 100%;
+         background: #111;
+         color: #ddd;
+         font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+         display: grid;
+         place-items: center;
+       }
+       .wrap { display: grid; gap: 10px; place-items: center; }
+       canvas { image-rendering: pixelated; background: #000; border: 1px solid #333; }
+       .caption { font-size: 12px; color: #9aa0a6; }
+     </style>
+   </head>
+   <body>
+     <div class="wrap">
+       <canvas id="game" width="400" height="400"></canvas>
+       <div class="caption">20×20 grid; 20 px per cell</div>
+     </div>
 
+      <script>
+        const GRID_SIZE = 20;
+        const CELL_SIZE = 20;
+        const TICK_HZ = 8;
+        const MS_PER_SECOND = 1000;
+        const TICK_MS = MS_PER_SECOND / TICK_HZ;
 
+        const COLOR_BACKGROUND = '#101010';
+        const COLOR_GRID_LINE = '#1f1f1f';
+        const COLOR_SNAKE_HEAD = '#39d353';
+        const COLOR_SNAKE_FRONT = '#b8ffcc';
+
+        const HALF_PIXEL_OFFSET = 0.5;
+        const SNAKE_FRONT_THICKNESS = 6;
+        const SNAKE_FRONT_MARGIN = 4;
+        const SNAKE_EDGE_OFFSET = 2;
+
+        const DIRECTION_LEFT = { x: -1, y: 0 };
+        const DIRECTION_RIGHT = { x: 1, y: 0 };
+        const DIRECTION_UP = { x: 0, y: -1 };
+        const DIRECTION_DOWN = { x: 0, y: 1 };
+
+        const KEYS_LEFT = ['ArrowLeft', 'a', 'A'];
+        const KEYS_RIGHT = ['ArrowRight', 'd', 'D'];
+        const KEYS_UP = ['ArrowUp', 'w', 'W'];
+        const KEYS_DOWN = ['ArrowDown', 's', 'S'];
+        const KEYS_RESTART = ['r', 'R', 'Enter'];
+
+        const CAPTION_READY_MESSAGE = 'Controls: Arrows/WASD to move. Press Enter or R to start';
+        const CAPTION_RUNNING_MESSAGE = 'Eat apples!';
+        const CAPTION_GAME_OVER_MESSAGE = 'Game Over. Press R or Enter to restart';
+
+        const GAME_STATE_READY = 'ready';
+        const GAME_STATE_RUNNING = 'running';
+        const GAME_STATE_OVER = 'over';
+
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+
+        const logicalSize = GRID_SIZE * CELL_SIZE;
+        const pixelRatio = window.devicePixelRatio || 1;
+
+        function configureCanvasForHiDpi(element, context, size, ratio) {
+          element.style.width = size + 'px';
+          element.style.height = size + 'px';
+          element.width = Math.floor(size * ratio);
+          element.height = Math.floor(size * ratio);
+          context.setTransform(ratio, 0, 0, ratio, 0, 0);
+        }
+
+        configureCanvasForHiDpi(canvas, ctx, logicalSize, pixelRatio);
+
+        const startPosition = { x: Math.floor(GRID_SIZE / 2), y: Math.floor(GRID_SIZE / 2) };
+        let head = { ...startPosition };
+        let direction = { ...DIRECTION_LEFT };
+        let queuedDirection = { ...direction };
+        let gameState = GAME_STATE_READY;
+        let tickTimerId = null;
+
+        const captionEl = document.querySelector('.caption');
+
+        function updateCaption(text) {
+          captionEl.textContent = text;
+        }
+
+        function queueDirectionChange(dx, dy) {
+          if (dx === -direction.x && dy === -direction.y) return;
+          queuedDirection = { x: dx, y: dy };
+        }
+
+        function directionForKey(key) {
+          if (KEYS_LEFT.includes(key)) return DIRECTION_LEFT;
+          if (KEYS_RIGHT.includes(key)) return DIRECTION_RIGHT;
+          if (KEYS_UP.includes(key)) return DIRECTION_UP;
+          if (KEYS_DOWN.includes(key)) return DIRECTION_DOWN;
+          return null;
+        }
+
+        window.addEventListener('keydown', (event) => {
+          const key = event.key;
+          if (gameState === GAME_STATE_READY && KEYS_RESTART.includes(key)) {
+            startGame();
+            return;
+          }
+          if (gameState === GAME_STATE_OVER && KEYS_RESTART.includes(key)) {
+            resetGame();
+            return;
+          }
+          if (gameState !== GAME_STATE_RUNNING) return;
+          const next = directionForKey(key);
+          if (next) queueDirectionChange(next.x, next.y);
+        });
+
+        function drawBackground(context, size) {
+          context.fillStyle = COLOR_BACKGROUND;
+          context.fillRect(0, 0, size, size);
+        }
+
+        function drawGridLines(context, gridSize, cellSize, size) {
+          context.strokeStyle = COLOR_GRID_LINE;
+          context.lineWidth = 1;
+          context.beginPath();
+          for (let i = 0; i <= gridSize; i++) {
+            const p = i * cellSize;
+            context.moveTo(p + HALF_PIXEL_OFFSET, 0);
+            context.lineTo(p + HALF_PIXEL_OFFSET, size);
+            context.moveTo(0, p + HALF_PIXEL_OFFSET);
+            context.lineTo(size, p + HALF_PIXEL_OFFSET);
+          }
+          context.stroke();
+        }
+
+        function drawSnakeHead(context, headCell, cellSize, facing) {
+          const x = headCell.x * cellSize;
+          const y = headCell.y * cellSize;
+          context.fillStyle = COLOR_SNAKE_HEAD;
+          context.fillRect(x, y, cellSize, cellSize);
+
+          context.fillStyle = COLOR_SNAKE_FRONT;
+          if (facing.x === -1) {
+            context.fillRect(x + SNAKE_EDGE_OFFSET, y + SNAKE_FRONT_MARGIN, SNAKE_FRONT_THICKNESS, cellSize - SNAKE_FRONT_MARGIN * 2);
+          } else if (facing.x === 1) {
+            context.fillRect(x + cellSize - (SNAKE_FRONT_THICKNESS + SNAKE_EDGE_OFFSET), y + SNAKE_FRONT_MARGIN, SNAKE_FRONT_THICKNESS, cellSize - SNAKE_FRONT_MARGIN * 2);
+          } else if (facing.y === -1) {
+            context.fillRect(x + SNAKE_FRONT_MARGIN, y + SNAKE_EDGE_OFFSET, cellSize - SNAKE_FRONT_MARGIN * 2, SNAKE_FRONT_THICKNESS);
+          } else if (facing.y === 1) {
+            context.fillRect(x + SNAKE_FRONT_MARGIN, y + cellSize - (SNAKE_FRONT_THICKNESS + SNAKE_EDGE_OFFSET), cellSize - SNAKE_FRONT_MARGIN * 2, SNAKE_FRONT_THICKNESS);
+          }
+        }
+
+        function renderFrame() {
+          ctx.clearRect(0, 0, logicalSize, logicalSize);
+          drawBackground(ctx, logicalSize);
+          drawGridLines(ctx, GRID_SIZE, CELL_SIZE, logicalSize);
+          drawSnakeHead(ctx, head, CELL_SIZE, direction);
+        }
+
+        function wouldHitWall(x, y) {
+          const outLeft = x < 0;
+          const outRight = x >= GRID_SIZE;
+          const outTop = y < 0;
+          const outBottom = y >= GRID_SIZE;
+          return outLeft || outRight || outTop || outBottom;
+        }
+
+        function advanceGameState() {
+          if (gameState !== GAME_STATE_RUNNING) return;
+          direction = queuedDirection;
+          const nextX = head.x + direction.x;
+          const nextY = head.y + direction.y;
+          if (wouldHitWall(nextX, nextY)) {
+            triggerGameOver();
+            return;
+          }
+          head.x = nextX;
+          head.y = nextY;
+          renderFrame();
+        }
+
+        function triggerGameOver() {
+          gameState = GAME_STATE_OVER;
+          stopGameLoop();
+          updateCaption(CAPTION_GAME_OVER_MESSAGE);
+        }
+
+        function startGameLoop() {
+          stopGameLoop();
+          tickTimerId = setInterval(advanceGameState, TICK_MS);
+        }
+
+        function stopGameLoop() {
+          if (tickTimerId !== null) {
+            clearInterval(tickTimerId);
+            tickTimerId = null;
+          }
+        }
+
+        function resetGame() {
+          head = { ...startPosition };
+          direction = { ...DIRECTION_LEFT };
+          queuedDirection = { ...direction };
+          gameState = GAME_STATE_RUNNING;
+          updateCaption(CAPTION_RUNNING_MESSAGE);
+          renderFrame();
+          startGameLoop();
+        }
+
+        function startGame() {
+          gameState = GAME_STATE_RUNNING;
+          updateCaption(CAPTION_RUNNING_MESSAGE);
+          renderFrame();
+          startGameLoop();
+        }
+
+        updateCaption(CAPTION_READY_MESSAGE);
+        renderFrame();
+      </script>
+   </body>
+ </html>

@@ -6,10 +6,32 @@
   "main": "electron/main.js",
   "scripts": {
     "dev": "electron .",
-    "start": "electron ."
+    "start": "electron .",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
-    "electron": "^31.0.0"
+    "electron": "^31.0.0",
+    "vitest": "^1.6.0",
+    "@vitest/coverage-v8": "^1.6.0"
+  },
+  "vitest": {
+    "coverage": {
+      "provider": "v8",
+      "reporter": ["text", "html"],
+      "reportsDirectory": "coverage",
+      "cleanOnRerun": true,
+      "include": [
+        "src/**/*.{js,ts}"
+      ],
+      "exclude": [
+        "**/electron/**",
+        "**/tests/**",
+        "**/node_modules/**",
+        "**/dist/**",
+        "**/coverage/**"
+      ]
+    }
   }
 }
 

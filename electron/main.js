@@ -1,11 +1,16 @@
 const { app, BrowserWindow } = require('electron');
 
+const WINDOW_WIDTH = 480;
+const WINDOW_HEIGHT = 520;
+const WINDOW_BACKGROUND = '#111111';
+const MAC_PLATFORM = 'darwin';
+
 function createMainWindow() {
   const win = new BrowserWindow({
-    width: 480,
-    height: 520,
+    width: WINDOW_WIDTH,
+    height: WINDOW_HEIGHT,
     resizable: false,
-    backgroundColor: '#111111',
+    backgroundColor: WINDOW_BACKGROUND,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -27,7 +32,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (process.platform !== MAC_PLATFORM) app.quit();
 });
 
 
