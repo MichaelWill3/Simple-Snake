@@ -39,6 +39,8 @@
         const COLOR_GRID_LINE = '#1f1f1f';
         const COLOR_SNAKE_HEAD = '#39d353';
         const COLOR_SNAKE_FRONT = '#b8ffcc';
+        const COLOR_SNAKE_BODY = '#2ea043';
+        const COLOR_FOOD = '#ff3b30';
 
         const HALF_PIXEL_OFFSET = 0.5;
         const SNAKE_FRONT_THICKNESS = 6;
@@ -86,6 +88,9 @@
         let queuedDirection = { ...direction };
         let gameState = GAME_STATE_READY;
         let tickTimerId = null;
+        let snakeSegments = [{ ...startPosition }];
+        let pendingGrowth = 0;
+        let foodCell = null;
 
         const captionEl = document.querySelector('.caption');
 
@@ -158,10 +163,26 @@
           }
         }
 
+        function drawSnakeBody(context, segments, cellSize) {
+          context.fillStyle = COLOR_SNAKE_BODY;
+          for (let i = 1; i < segments.length; i++) {
+            const s = segments[i];
+            context.fillRect(s.x * cellSize, s.y * cellSize, cellSize, cellSize);
+          }
+        }
+
+        function drawFood(context, cell, cellSize) {
+          if (!cell) return;
+          context.fillStyle = COLOR_FOOD;
+          context.fillRect(cell.x * cellSize, cell.y * cellSize, cellSize, cellSize);
+        }
+
         function renderFrame() {
           ctx.clearRect(0, 0, logicalSize, logicalSize);
           drawBackground(ctx, logicalSize);
           drawGridLines(ctx, GRID_SIZE, CELL_SIZE, logicalSize);
+          drawFood(ctx, foodCell, CELL_SIZE);
+          drawSnakeBody(ctx, snakeSegments, CELL_SIZE);
           drawSnakeHead(ctx, head, CELL_SIZE, direction);
         }
 
@@ -173,6 +194,45 @@
           return outLeft || outRight || outTop || outBottom;
         }
 
+        function makeKey(x, y) {
+          return `${x},${y}`;
+        }
+
+        function buildOccupiedSet(segments) {
+          const set = new Set();
+          for (const s of segments) set.add(makeKey(s.x, s.y));
+          return set;
+        }
+
+        function spawnFoodOnEmptyCell() {
+          const occupied = buildOccupiedSet(snakeSegments);
+          const total = GRID_SIZE * GRID_SIZE;
+          if (occupied.size >= total) return null;
+          const empty = [];
+          for (let y = 0; y < GRID_SIZE; y++) {
+            for (let x = 0; x < GRID_SIZE; x++) {
+              const key = makeKey(x, y);
+              if (!occupied.has(key)) empty.push({ x, y });
+            }
+          }
+          const idx = Math.floor(Math.random() * empty.length);
+          return empty[idx] || null;
+        }
+
+        function cellsEqual(a, b) {
+          return a && b && a.x === b.x && a.y === b.y;
+        }
+
+        function applySnakeMovement(nextHead) {
+          snakeSegments.unshift({ ...nextHead });
+          if (pendingGrowth > 0) {
+            pendingGrowth -= 1;
+          } else {
+            snakeSegments.pop();
+          }
+          head = { ...snakeSegments[0] };
+        }
+
         function advanceGameState() {
           if (gameState !== GAME_STATE_RUNNING) return;
           direction = queuedDirection;
@@ -182,8 +242,12 @@
             triggerGameOver();
             return;
           }
-          head.x = nextX;
-          head.y = nextY;
+          const nextHead = { x: nextX, y: nextY };
+          if (cellsEqual(nextHead, foodCell)) {
+            pendingGrowth += 1;
+            foodCell = spawnFoodOnEmptyCell();
+          }
+          applySnakeMovement(nextHead);
           renderFrame();
         }
 
@@ -210,6 +274,9 @@
           direction = { ...DIRECTION_LEFT };
           queuedDirection = { ...direction };
           gameState = GAME_STATE_RUNNING;
+          snakeSegments = [{ ...startPosition }];
+          pendingGrowth = 0;
+          foodCell = spawnFoodOnEmptyCell();
           updateCaption(CAPTION_RUNNING_MESSAGE);
           renderFrame();
           startGameLoop();
@@ -218,6 +285,9 @@
         function startGame() {
           gameState = GAME_STATE_RUNNING;
           updateCaption(CAPTION_RUNNING_MESSAGE);
+          snakeSegments = [{ ...startPosition }];
+          pendingGrowth = 0;
+          foodCell = spawnFoodOnEmptyCell();
           renderFrame();
           startGameLoop();
         }

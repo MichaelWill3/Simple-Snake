@@ -18,4 +18,17 @@ export function spawnFood(gridWidth, gridHeight, occupiedCells) {
   return emptyCells[index];
 }
 
+export function cellsEqual(a, b) {
+  return a != null && b != null && a.x === b.x && a.y === b.y;
+}
+
+export function checkAndHandleEat(headCell, foodCell, gridWidth, gridHeight, occupiedCells) {
+  const didEat = cellsEqual(headCell, foodCell);
+  if (!didEat) {
+    return { didEat: false, nextFood: foodCell, growth: 0 };
+  }
+  const nextFood = spawnFood(gridWidth, gridHeight, occupiedCells);
+  return { didEat: true, nextFood, growth: 1 };
+}
+
 
